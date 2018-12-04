@@ -1,6 +1,5 @@
 package com.rohitarya.glide.facedetection.transformation;
 
-import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.PointF;
@@ -42,70 +41,57 @@ public class FaceCenterCrop extends BitmapTransformation {
         // Intentionally empty.
     }
 
-    /**
-     * @deprecated Use {@link #FaceCenterCrop()}
-     */
-    @Deprecated
-    public FaceCenterCrop(Context context){
-        this();
+    @NonNull
+    private static Bitmap.Config getNonNullConfig(@NonNull Bitmap bitmap) {
+        return bitmap.getConfig() != null ? bitmap.getConfig() : Bitmap.Config.ARGB_8888;
     }
 
     /**
-     * @param bitmapPool A {@link com.bumptech.glide.load.engine.bitmap_recycle.BitmapPool} that can be used to obtain and
+     * @param pool A {@link com.bumptech.glide.load.engine.bitmap_recycle.BitmapPool} that can be used to obtain and
      *                   return intermediate {@link Bitmap}s used in this transformation. For every
      *                   {@link android.graphics.Bitmap} obtained from the pool during this transformation, a
      *                   {@link android.graphics.Bitmap} must also be returned.
-     * @param original   The {@link android.graphics.Bitmap} to transform
-     * @param width      The ideal width of the transformed bitmap
-     * @param height     The ideal height of the transformed bitmap
+     * @param toTransform   The {@link android.graphics.Bitmap} to transform
+     * @param outWidth      The ideal width of the transformed bitmap
+     * @param outHeight     The ideal height of the transformed bitmap
      * @return a transformed bitmap with face being in center.
      */
     @Override
-    protected Bitmap transform(@NonNull BitmapPool bitmapPool, @NonNull Bitmap original, int width, int height) {
+    protected Bitmap transform(@NonNull BitmapPool pool, @NonNull Bitmap toTransform, int outWidth, int outHeight) {
+        int width = toTransform.getWidth();
+        int height = toTransform.getHeight();
 
-        float scaleX = (float) width / original.getWidth();
-        float scaleY = (float) height / original.getHeight();
-
-        if (scaleX != scaleY) {
-
-            Bitmap.Config config =
-                    original.getConfig() != null ? original.getConfig() : Bitmap.Config.ARGB_8888;
-            Bitmap result = bitmapPool.get(width, height, config);
-
-            float scale = Math.max(scaleX, scaleY);
-
-            float left = 0f;
-            float top = 0f;
-
-            float scaledWidth = width, scaledHeight = height;
-
-            PointF focusPoint = new PointF();
-
-            detectFace(original, focusPoint);
-
-            if (scaleX < scaleY) {
-
-                scaledWidth = scale * original.getWidth();
-
-                float faceCenterX = scale * focusPoint.x;
-                left = getLeftPoint(width, scaledWidth, faceCenterX);
-
-            } else {
-
-                scaledHeight = scale * original.getHeight();
-
-                float faceCenterY = scale * focusPoint.y;
-                top = getTopPoint(height, scaledHeight, faceCenterY);
-            }
-
-            RectF targetRect = new RectF(left, top, left + scaledWidth, top + scaledHeight);
-            Canvas canvas = new Canvas(result);
-            canvas.drawBitmap(original, null, targetRect, null);
-            //No need to recycle() original Bitmap as Glide will take care of returning our original Bitmap to the BitmapPool
-            return result;
-        } else {
-            return original;
+        if (width == outWidth && height == outHeight) {
+            return toTransform;
         }
+
+        float scaleX = (float) outWidth / width;
+        float scaleY = (float) outHeight / height;
+        final float scale = Math.max(scaleX, scaleY);
+        float left = 0f;
+        float top = 0f;
+        float scaledWidth = outWidth, scaledHeight = outHeight;
+        PointF focusPoint = new PointF();
+
+        detectFace(toTransform, focusPoint);
+
+        if (scaleX < scaleY) {
+            scaledWidth = scale * toTransform.getWidth();
+            float faceCenterX = scale * focusPoint.x;
+            left = getLeftPoint(outWidth, scaledWidth, faceCenterX);
+        } else {
+            scaledHeight = scale * toTransform.getHeight();
+            float faceCenterY = scale * focusPoint.y;
+            top = getTopPoint(outHeight, scaledHeight, faceCenterY);
+        }
+
+        RectF targetRect = new RectF(left, top, left + scaledWidth, top + scaledHeight);
+        Bitmap targetBitmap = pool.get(outWidth, outHeight, getNonNullConfig(toTransform));
+        targetBitmap.setHasAlpha(toTransform.hasAlpha());
+        Canvas canvas = new Canvas(targetBitmap);
+        canvas.drawBitmap(toTransform, null, targetRect, null);
+        //No need to recycle() original Bitmap as Glide will take care of returning our original Bitmap to the BitmapPool
+        return targetBitmap;
     }
 
     /**
@@ -183,7 +169,7 @@ public class FaceCenterCrop extends BitmapTransformation {
     }
 
     @Override
-    public void updateDiskCacheKey(MessageDigest messageDigest) {
+    public void updateDiskCacheKey(@NonNull MessageDigest messageDigest) {
         messageDigest.update(ID_BYTES);
     }
 }
